@@ -1,23 +1,274 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ahorcado</title>
-    <link rel="stylesheet" href="styles.css">
+    <title>Ahorcado con Teclado en Pantalla</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0; /* Color de fondo de la página */
+        }
+        #gameContainer {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            border: 2px solid #000; /* Borde cuadrado */
+            border-radius: 10px; /* Bordes redondeados */
+            background-color: #fff; /* Color de fondo del contenedor */
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1); /* Sombra sutil */
+        }
+        #wordDisplay {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+        #hangmanCanvas {
+            margin-top: 20px;
+            border: 1px solid #000;
+        }
+        #inputSection {
+            margin-top: 20px;
+        }
+        #keyboard {
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        #keyboard div {
+            margin-bottom: 5px;
+        }
+        .key {
+            display: inline-block;
+            margin: 5px;
+            padding: 10px;
+            border: 1px solid #000;
+            cursor: pointer;
+            background-color: #f0f0f0;
+        }
+        .key.disabled {
+            background-color: #ddd;
+            cursor: not-allowed;
+        }
+    </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Ahorcado</h1>
-        <canvas id="hangmanCanvas" width="200" height="200"></canvas>
-        <p id="wordDisplay"></p>
-        <p>Pista: <span id="hint"></span></p>
-        <p>Intentos restantes: <span id="attempts"></span></p>
-        <input type="text" id="letterInput" maxlength="1" placeholder="Introduce una letra" />
-        <button id="guessButton">Adivinar</button>
-        <p id="message"></p>
-        <button id="resetButton">Reiniciar Juego</button>
+
+<div id="gameContainer">
+    <h1>Juego del ahorcado</h1>
+    <div id="wordDisplay"></div>
+    <div id="hint"></div>
+    <p>Intentos restantes: <span id="attempts"></span></p>
+    <p id="message"></p>
+
+    <canvas id="hangmanCanvas" width="200" height="200"></canvas>
+
+    <div id="inputSection">
+        <div id="keyboard">
+            <!-- El teclado se generará aquí -->
+        </div>
     </div>
-    <script src="script.js"></script>
+
+    <button id="resetButton">Reiniciar juego</button>
+</div>
+
+<script>
+const words = [
+    { word: "javascript es divertido", hint: "Lenguaje de programación web" },
+    { word: "desarrollo web", hint: "Proceso de escribir código para sitios web" },
+    { word: "programacion orientada a objetos", hint: "Paradigma de programación" },
+    { word: "ahorcado clasico", hint: "Juego de adivinanza" },
+    { word: "computadora portatil", hint: "Máquina que procesa datos y es fácil de transportar" }
+];
+
+let selectedWord = '';
+let selectedHint = '';
+let attemptsLeft = 6;
+let guessedLetters = [];
+let gameOver = false;
+
+const wordDisplay = document.getElementById('wordDisplay');
+const attemptsDisplay = document.getElementById('attempts');
+const hintDisplay = document.getElementById('hint');
+const messageDisplay = document.getElementById('message');
+const resetButton = document.getElementById('resetButton');
+const canvas = document.getElementById('hangmanCanvas');
+const ctx = canvas.getContext('2d');
+const keyboardDiv = document.getElementById('keyboard');
+
+const alphabet = 'abcdefghijklmnopqrstuvwxyz'.split('');
+
+function startGame() {
+    const randomIndex = Math.floor(Math.random() * words.length);
+    selectedWord = words[randomIndex].word;
+    selectedHint = words[randomIndex].hint;
+    attemptsLeft = 6;
+    guessedLetters = [];
+    gameOver = false;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height); // Limpiar el canvas
+    drawHang(); // Dibujar la estructura de la horca
+    drawHangman(0); // Dibujar el ahorcado vacío
+    generateKeyboard(); // Generar teclado
+    updateDisplay();
+}
+
+function updateDisplay() {
+    const displayWord = selectedWord.split('').map(letter => {
+        if (letter === ' ') {
+            return '\u00A0'; // Espacio en blanco
+        } else {
+            return guessedLetters.includes(letter) ? letter : '_';
+        }
+    }).join(' ');
+
+    wordDisplay.innerHTML = displayWord;
+    hintDisplay.textContent = selectedHint;
+    attemptsDisplay.textContent = attemptsLeft;
+
+    if (displayWord.replace(/\u00A0/g, '').replace(/ /g, '') === selectedWord.replace(/ /g, '')) {
+        messageDisplay.textContent = '¡Ganaste!';
+        gameOver = true;
+        disableKeyboard();
+    } else if (attemptsLeft <= 0) {
+        messageDisplay.textContent = `¡Perdiste! La palabra era "${selectedWord}".`;
+        gameOver = true;
+        disableKeyboard();
+    } else {
+        messageDisplay.textContent = '';
+    }
+}
+
+function drawHang() {
+    ctx.beginPath();
+    ctx.moveTo(20, 180); // Base
+    ctx.lineTo(180, 180); // Base
+    ctx.moveTo(40, 180); // Post
+    ctx.lineTo(40, 40); // Vertical
+    ctx.lineTo(120, 40); // Horizontal
+    ctx.lineTo(120, 60); // Horizontal
+    ctx.stroke();
+}
+
+function drawHangman(step) {
+    switch (step) {
+        case 1: // Cabeza
+            ctx.beginPath();
+            ctx.arc(120, 75, 15, 0, Math.PI * 2, true); // Cabeza
+            ctx.stroke();
+            break;
+        case 2: // Cuerpo
+            ctx.beginPath();
+            ctx.moveTo(120, 90);
+            ctx.lineTo(120, 135); // Cuerpo
+            ctx.stroke();
+            break;
+        case 3: // Brazo izquierdo
+            ctx.beginPath();
+            ctx.moveTo(120, 90);
+            ctx.lineTo(100, 105); // Brazo izquierdo
+            ctx.stroke();
+            break;
+        case 4: // Brazo derecho
+            ctx.beginPath();
+            ctx.moveTo(120, 90);
+            ctx.lineTo(140, 105); // Brazo derecho
+            ctx.stroke();
+            break;
+        case 5: // Pierna izquierda
+            ctx.beginPath();
+            ctx.moveTo(120, 135);
+            ctx.lineTo(100, 160); // Pierna izquierda
+            ctx.stroke();
+            break;
+        case 6: // Pierna derecha
+            ctx.beginPath();
+            ctx.moveTo(120, 135);
+            ctx.lineTo(140, 160); // Pierna derecha
+            ctx.stroke();
+            break;
+        default:
+            break;
+    }
+}
+
+function generateKeyboard() {
+    keyboardDiv.innerHTML = ''; // Limpiar el teclado
+
+    const firstRow = alphabet.slice(0, 12); // 12 letras en la primera fila
+    const secondRow = alphabet.slice(12, 21); // 9 letras en la segunda fila
+    const thirdRow = alphabet.slice(21, 26); // 5 letras en la tercera fila
+
+    const firstRowDiv = document.createElement('div');
+    const secondRowDiv = document.createElement('div');
+    const thirdRowDiv = document.createElement('div');
+
+    firstRow.forEach(letter => {
+        const keyButton = document.createElement('button');
+        keyButton.textContent = letter;
+        keyButton.classList.add('key');
+        keyButton.addEventListener('click', () => guessLetter(letter));
+        firstRowDiv.appendChild(keyButton);
+    });
+
+    secondRow.forEach(letter => {
+        const keyButton = document.createElement('button');
+        keyButton.textContent = letter;
+        keyButton.classList.add('key');
+        keyButton.addEventListener('click', () => guessLetter(letter));
+        secondRowDiv.appendChild(keyButton);
+    });
+
+    thirdRow.forEach(letter => {
+        const keyButton = document.createElement('button');
+        keyButton.textContent = letter;
+        keyButton.classList.add('key');
+        keyButton.addEventListener('click', () => guessLetter(letter));
+        thirdRowDiv.appendChild(keyButton);
+    });
+
+    keyboardDiv.appendChild(firstRowDiv);
+    keyboardDiv.appendChild(secondRowDiv);
+    keyboardDiv.appendChild(thirdRowDiv);
+}
+
+function guessLetter(letter) {
+    if (!gameOver && !guessedLetters.includes(letter)) {
+        guessedLetters.push(letter);
+
+        // Deshabilitar la letra en el teclado
+        document.querySelectorAll('.key').forEach(key => {
+            if (key.textContent === letter) {
+                key.classList.add('disabled');
+                key.disabled = true;
+            }
+        });
+
+        if (!selectedWord.includes(letter)) {
+            attemptsLeft--;
+            drawHangman(6 - attemptsLeft); // Dibuja el siguiente paso
+        }
+        updateDisplay();
+    }
+}
+
+function disableKeyboard() {
+    document.querySelectorAll('.key').forEach(key => {
+        key.classList.add('disabled');
+        key.disabled = true;
+    });
+}
+
+resetButton.addEventListener('click', startGame);
+
+// Iniciar el juego al cargar la página
+startGame();
+</script>
+
 </body>
 </html>
